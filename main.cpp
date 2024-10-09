@@ -59,7 +59,18 @@ void xmitCodeElement(uint16_t ontime, uint16_t offtime, uint8_t PWM_code );
 void delay_ten_us(uint16_t us);
 uint8_t read_bits(uint8_t count);
 uint16_t rawData[300];
-uint16_t previousMillis = 0;
+
+volatile int interruptCounter;  //for counting interrupt
+hw_timer_t * timer = NULL;      //H/W timer defining (Pointer to the Structure)
+portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+
+void IRAM_ATTR onTimer() {      //Defining Inerrupt function with IRAM_ATTR for faster access
+ portENTER_CRITICAL_ISR(&timerMux);
+ interruptCounter++;
+ portEXIT_CRITICAL_ISR(&timerMux);
+}
+
+
 
 
 
@@ -118,6 +129,37 @@ uint8_t bitsleft_r = 0;
 uint8_t bits_r=0;
 uint8_t code_ptr;
 volatile const IrCode * powerCode;
+
+
+
+/****************************** LED AND DELAY FUNCTIONS ********/
+
+
+// This function delays the specified number of 10 microseconds
+// it is 'hardcoded' and is calibrated by adjusting DELAY_CNT
+// in main.h Unless you are changing the crystal from 8MHz, dont
+// mess with this.
+//-due to uint16_t datatype, max delay is 65535 tens of microseconds, or 655350 us, or 655.350 ms. 
+//-NB: DELAY_CNT has been increased in main.h from 11 to 25 (last I checked) in order to allow this function
+// to work properly with 16MHz Arduinos now (instead of 8MHz).
+void delay_ten_us(uint16_t us) {
+  uint8_t timer;
+  while (us != 0) {
+    // for 8MHz we want to delay 80 cycles per 10 microseconds
+    // this code is tweaked to give about that amount.
+    for (timer=0; timer <= DELAY_CNT; timer++) {
+      NOP;
+      NOP;
+    }
+    NOP;
+    us--;
+  }
+}
+
+
+
+
+
 
 // we cant read more than 8 bits at a time so dont try!
 uint8_t read_bits(uint8_t count)
@@ -184,6 +226,14 @@ uint8_t region = NA;
 
 void setup()   
 {
+
+ timer = timerBegin(0, 80, true);           	// timer 0, prescalar: 80, UP counting
+ timerAttachInterrupt(timer, &onTimer, true); 	// Attach interrupt
+ timerAlarmWrite(timer, 1000000, true);  		// Match value= 1000000 for 1 sec. delay.
+ timerAlarmEnable(timer);           			// Enable Timer with interrupt (Alarm Enable)
+
+
+
   //damit der Stick auf Batteriebetrieb an bleibt
   pinMode(4, OUTPUT); 
   digitalWrite(4, HIGH);
@@ -371,50 +421,17 @@ void loop()
   }
   yield();
 
+ if (interruptCounter > 0) {
+ 
+   portENTER_CRITICAL(&timerMux);
+   interruptCounter--;
+   portEXIT_CRITICAL(&timerMux);
+ 
+  StickCP2.Display.fillRect(145,90,95,45,BLACK);
+  StickCP2.Display.setTextSize(1); StickCP2.Display.setCursor(155, 115);
+  StickCP2.Display.printf("%d %%", StickCP2.Power.getBatteryLevel());
+}
 
-
-
-
-  uint16_t currentMillis = millis();
-  if (currentMillis - previousMillis >= 60000) { //batt percentage update only once a minute = 60.000 milisec
-    
-    // save the last time batt-percentage was updated
-    previousMillis = currentMillis;
-    
-    StickCP2.Display.fillRect(145,90,95,45,BLACK);
-    StickCP2.Display.setTextSize(1);
-    StickCP2.Display.setCursor(155, 115); StickCP2.Display.printf("%d %%", StickCP2.Power.getBatteryLevel());
-  }
-
-
-
-
-
-
+ 
 
 }//loop
-
-
-/****************************** LED AND DELAY FUNCTIONS ********/
-
-
-// This function delays the specified number of 10 microseconds
-// it is 'hardcoded' and is calibrated by adjusting DELAY_CNT
-// in main.h Unless you are changing the crystal from 8MHz, dont
-// mess with this.
-//-due to uint16_t datatype, max delay is 65535 tens of microseconds, or 655350 us, or 655.350 ms. 
-//-NB: DELAY_CNT has been increased in main.h from 11 to 25 (last I checked) in order to allow this function
-// to work properly with 16MHz Arduinos now (instead of 8MHz).
-void delay_ten_us(uint16_t us) {
-  uint8_t timer;
-  while (us != 0) {
-    // for 8MHz we want to delay 80 cycles per 10 microseconds
-    // this code is tweaked to give about that amount.
-    for (timer=0; timer <= DELAY_CNT; timer++) {
-      NOP;
-      NOP;
-    }
-    NOP;
-    us--;
-  }
-}
