@@ -1,8 +1,7 @@
 # M5Stick C Plus 2 - tvbgone
 
-Just a fast booting port of tvbgone for the M5Stick C Plus 2.
-Features: battery percentage, Region switch, nothing else
-
+- Just a fast booting port of tvbgone for the M5Stick C Plus 2.
+- Features: battery percentage, Region switch, nothing else
 
 Port of popular agrimpelhuber/esp8266-tvbgone
 Send 100+ IR-Codes by Buttonpress, to turn off any TV, Projector etc. 
